@@ -93,13 +93,13 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
       last_good_timestamp = nil
       result.each do |entity|
         event = LogStash::Event.new(entity.properties)
-        event["type"] = @table_name
+        event.set("type",@table_name)
 
         # Help pretty print etw files
-        if (@etw_pretty_print && !event["EventMessage"].nil? && !event["Message"].nil?)
+        if (@etw_pretty_print && !event.get("EventMessage").nil? && !event.get("Message").nil?)
           @logger.debug("event: " + event.to_s)
-          eventMessage = event["EventMessage"].to_s
-          message = event["Message"].to_s
+          eventMessage = event.get("EventMessage").to_s
+          message = event.get("Message").to_s
           @logger.debug("EventMessage: " + eventMessage)
           @logger.debug("Message: " + message)
           if (eventMessage.include? "%")
@@ -114,17 +114,17 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
               @logger.debug("New Value: " + newValue)
               eventMessage[key] = newValue
             end # do block
-            event["EventMessage"] = eventMessage
-            @logger.debug("pretty print end. result: " + event["EventMessage"].to_s)
+            event.set("EventMessage",eventMessage)
+            @logger.debug("pretty print end. result: " + event.get("EventMessage").to_s)
           end
         end
         decorate(event)
-        if event['PreciseTimeStamp'].is_a?(Time)
-          event['PreciseTimeStamp']=LogStash::Timestamp.new(event['PreciseTimeStamp'])
+        if event.get("PreciseTimeStamp").is_a?(Time)
+          event.set("PreciseTimeStamp",LogStash::Timestamp.new(event.get('PreciseTimeStamp')))
         end
         output_queue << event
-        if (!event["TIMESTAMP"].nil?)
-          last_good_timestamp = event["TIMESTAMP"]
+        if (!event.get("TIMESTAMP").nil?)
+          last_good_timestamp = event.get("TIMESTAMP")
         end
       end # each block
       @idle_delay = 0
