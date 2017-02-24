@@ -167,7 +167,8 @@ var wadcfgConfigPrototype = {
         "containerName": "blobContainerName",
         "blobName": "blobNameWithWadCfg"
     },
-    "StorageAccount": "diagstorageaccount"
+    "StorageAccount": "diagstorageaccount",
+    "StorageType": "TableAndBlob"
 }
 `.replace(/\\/g, "\\\\\\\\"), // Since this string will be fed through the JSON parser, all backslashes need to be escaped two more times
 
@@ -177,6 +178,7 @@ var wadcfgConfigPrototype = {
     "storageAccountName": "diagstorageaccount",
     "storageAccountKey": "{base64 encoded key}",
     "storageAccountEndPoint": "https://core.windows.net",
+    "storageAccountSasToken": "{sas token}",
     "EventHub": {
         "Url": "https://myeventhub-ns.servicebus.windows.net/diageventhub",
         "SharedAccessKeyName": "SendRule",
@@ -187,7 +189,8 @@ var wadcfgConfigPrototype = {
             {
                 "name": "secondarydiagstorageaccount",
                 "key": "{base64 encoded key}",
-                "endpoint": "https://core.windows.net"
+                "endpoint": "https://core.windows.net",
+                "sasToken": "{sas token}"
             }
         ]
     },
@@ -260,16 +263,17 @@ var wadcfgConfigPrototype = {
     </WadCfg>
     <WadCfgBlob containerName="blobContainerName" blobName="blobNameWithWadCfg" />
     <StorageAccount>diagstorageaccount</StorageAccount>
+    <StorageType>TableAndBlob</StorageType>
   </PublicConfig>
 `,
     
     // XML private config prototype
     xmlPrivate : `
   <PrivateConfig xmlns="http://schemas.microsoft.com/ServiceHosting/2010/10/DiagnosticsConfiguration">
-    <StorageAccount name="diagstorageaccount" key="{base64 encoded key}" endpoint="https://core.windows.net" />
+    <StorageAccount name="diagstorageaccount" key="{base64 encoded key}" endpoint="https://core.windows.net" sasToken="{sas token}" />
     <EventHub Url="https://myeventhub-ns.servicebus.windows.net/diageventhub" SharedAccessKeyName="SendRule" SharedAccessKey="{base64 encoded key}" />
     <SecondaryStorageAccounts>
-        <StorageAccount name="secondarydiagstorageaccount" key="{base64 encoded key}" endpoint="https://core.windows.net" />
+        <StorageAccount name="secondarydiagstorageaccount" key="{base64 encoded key}" endpoint="https://core.windows.net" sasToken="{sas token}" />
     </SecondaryStorageAccounts>
     <SecondaryEventHubs>
         <EventHub Url="https://myeventhub-ns.servicebus.windows.net/secondarydiageventhub" SharedAccessKeyName="SendRule" SharedAccessKey="{base64 encoded key}" />
@@ -290,6 +294,10 @@ var wadcfgConfigPrototype = {
         {
             "json" : "/storageAccountEndPoint",
             "xml" : "/StorageAccount/endpoint"
+        },
+        {
+            "json" : "/storageAccountSasToken",
+            "xml" : "/StorageAccount/sasToken"
         },
         {
             "json" : "/EventHub/Url",
