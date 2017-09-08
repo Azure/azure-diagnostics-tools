@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-input-azureeventhub'
-  s.version       = '0.9.7'
+  s.version       = '0.9.8'
   s.platform      = "java"
   s.licenses      = ['Apache License (2.0)']
   s.summary       = "This plugin collects data from Azure Event Hubs."
