@@ -71,8 +71,15 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
           end
           receiver.acknowledge(msg)
         else
-          @logger.debug("[#{partition.to_s.rjust(2,"0")}] No message")
-          sleep(@thread_wait_sec)
+          error = receiver.getError()
+          if error
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] Receive error: #{error.to_s}")
+            receiver.close()
+            return last_event_offset
+          else
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] No message")
+            sleep(@thread_wait_sec)
+          end
         end
       end
     end
@@ -113,6 +120,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
       rescue org::apache::qpid::amqp_1_0::client::ConnectionErrorException => e
         sleep(@thread_wait_sec)
         @logger.debug("[#{partition.to_s.rjust(2,"0")}] resetting connection")
+        receiver.close()
       end
     end
   rescue LogStash::ShutdownSignal => e
