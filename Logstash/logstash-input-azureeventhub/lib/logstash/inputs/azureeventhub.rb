@@ -60,9 +60,9 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
         if msg
           body, annotationMap = get_pay_load(msg)
           last_event_offset = annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-offset")) unless annotationMap.nil?
-          @logger.debug("[#{partition.to_s.rjust(2,"0")}] Event: #{body[0..50] unless body.nil?}... " +
-            "Offset: #{annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-offset")) unless annotationMap.nil? } " +
-            "Time: #{annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-enqueued-time")).to_s unless annotationMap.nil? } " +
+          @logger.debug("[#{partition.to_s.rjust(2,"0")}] Event: #{body[0..50] unless body.nil?}... " <<
+            "Offset: #{annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-offset")) unless annotationMap.nil? } " <<
+            "Time: #{annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-enqueued-time")).to_s unless annotationMap.nil? } " <<
             "Sequence: #{annotationMap.get(org::apache::qpid::amqp_1_0::type::Symbol.valueOf("x-opt-sequence-number")).to_s unless annotationMap.nil? }")
 
           codec.decode(body) do |event|
@@ -128,7 +128,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
     raise e
   rescue => e
     @logger.error("[#{partition.to_s.rjust(2,"0")}] Oh My, An error occurred. \nError:#{e}:\nTrace:\n#{e.backtrace}", :exception => e)
-  end # process
+  end # process_partition
 
   public
   def run(output_queue)
