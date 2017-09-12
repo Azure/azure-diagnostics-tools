@@ -43,7 +43,7 @@ Port of the target Event Hub. Default value is 5671.
 
 __*receive_credits*__
 
-The credit number to limit the number of messages to receive in a processing cycle. Default value is 1000.
+The credit number to limit the number of messages to receive in a processing cycle. Value must be between 10 and 999. Default is 999.
 
 __*consumer_group*__
 
