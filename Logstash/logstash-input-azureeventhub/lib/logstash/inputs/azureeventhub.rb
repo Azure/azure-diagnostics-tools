@@ -29,6 +29,8 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   
   config :time_since_epoch_millis, :validate => :number, :default => Time.now.utc.to_i * 1000
   config :thread_wait_sec, :validate => :number, :default => 5
+
+  config :partition_receiver_epochs, :validate => :hash, :default => {}
   
   
   def initialize(*args)
@@ -75,7 +77,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
     return last_event_offset
   end # process
   
-  def process_partition(output_queue, partition)
+  def process_partition(output_queue, partition, epoch) 
     last_event_offset = nil
     while !stop?
       begin
@@ -83,12 +85,22 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
         connStr = com::microsoft::azure::servicebus::ConnectionStringBuilder.new(host, @eventhub, @username, @key).toString()
         ehClient = com::microsoft::azure::eventhubs::EventHubClient.createFromConnectionStringSync(connStr)
 
-        if !last_event_offset.nil?
-          @logger.debug("[#{partition.to_s.rjust(2,"0")}] Offset filter > #{last_event_offset}")
-          receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, last_event_offset, false)
+        if !epoch.nil?
+          if !last_event_offset.nil?
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & offset > #{last_event_offset}")
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, last_event_offset, false, epoch)
+          else
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & timestamp > #{@time_since_epoch_millis}")
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis), epoch)
+          end
         else
-          @logger.debug("[#{partition.to_s.rjust(2,"0")}] Timestamp filter > #{@time_since_epoch_millis}")
-          receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis))
+          if !last_event_offset.nil?
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with offset > #{last_event_offset}")
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, last_event_offset, false)
+          else
+            @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with timestamp > #{@time_since_epoch_millis}")
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis))
+          end
         end
         receiver.setReceiveTimeout(java::time::Duration::ofSeconds(@thread_wait_sec));
         receiver.setPrefetchCount(@receive_credits)
@@ -110,7 +122,8 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   def run(output_queue)
     threads = []
     (0..(@partitions-1)).each do |p_id|
-      threads << Thread.new { process_partition(output_queue, p_id) }
+      epoch = partition_receiver_epochs[p_id.to_s] if @partition_receiver_epochs.key?(p_id.to_s)
+      threads << Thread.new { process_partition(output_queue, p_id, epoch) }
     end
     threads.each { |thr| thr.join }
   end # def run
