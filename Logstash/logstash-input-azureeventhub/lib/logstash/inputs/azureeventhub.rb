@@ -16,15 +16,15 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
 
   default :codec, "json"
   
-  config :key, :validate => :string
-  config :username, :validate => :string
-  config :namespace, :validate => :string
+  config :key, :validate => :string, :required => true
+  config :username, :validate => :string, :required => true
+  config :namespace, :validate => :string, :required => true
   config :domain, :validate => :string, :default => "servicebus.windows.net"
   config :port, :validate => :number, :default => 5671
   config :receive_credits, :validate => :number, :default => 999
   
-  config :eventhub, :validate => :string
-  config :partitions, :validate => :number
+  config :eventhub, :validate => :string, :required => true
+  config :partitions, :validate => :number, :required => true
   config :consumer_group, :validate => :string, :default => "$default"
   
   config :time_since_epoch_millis, :validate => :number, :default => Time.now.utc.to_i * 1000
