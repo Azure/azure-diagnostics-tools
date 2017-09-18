@@ -43,7 +43,7 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
 
     @last_timestamp = @collection_start_time_utc
     @idle_delay = @idle_delay_seconds
-    @continuation_token = nil
+    @query = nil
   end # register
 
   public
@@ -83,72 +83,71 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
 
   def process(output_queue)
     if @data_latency_minutes > 0
-      @until_timestamp = (Time.now - (60 * @data_latency_minutes)).iso8601 unless @continuation_token
+      @until_timestamp = (Time.now - (60 * @data_latency_minutes)).iso8601
       query_filter = build_latent_query
     else
       query_filter = build_zero_latency_query
     end
-    @logger.debug("Query filter: " + query_filter)
-    query = { :top => @entity_count_to_process, :filter => query_filter, :continuation_token => @continuation_token }
-    result = @azure_table_service.query_entities(@table_name, query)
-    @continuation_token = result.continuation_token
 
-    if result and result.length > 0
-      @logger.debug("#{result.length} results found.")
-      last_good_timestamp = nil
-      result.each do |entity|
-        event = LogStash::Event.new(entity.properties)
-        event.set("type", @table_name)
+    last_good_timestamp = nil
+    if @query.nil?
+      @query = AzureQuery.new(@logger, @azure_table_service, @table_name, query_filter, @entity_count_to_process)
+    end
 
-        # Help pretty print etw files
-        if (@etw_pretty_print && !event.get("EventMessage").nil? && !event.get("Message").nil?)
-          @logger.debug("event: " + event.to_s)
-          eventMessage = event.get("EventMessage").to_s
-          message = event.get("Message").to_s
-          @logger.debug("EventMessage: " + eventMessage)
-          @logger.debug("Message: " + message)
-          if (eventMessage.include? "%")
-            @logger.debug("starting pretty print")
-            toReplace = eventMessage.scan(/%\d+/)
-            payload = message.scan(/(?<!\\S)([a-zA-Z]+)=(\"[^\"]*\")(?!\\S)/)
-            # Split up the format string to seperate all of the numbers
-            toReplace.each do |key|
-              @logger.debug("Replacing key: " + key.to_s)
-              index = key.scan(/\d+/).join.to_i
-              newValue = payload[index - 1][1]
-              @logger.debug("New Value: " + newValue)
-              eventMessage[key] = newValue
-            end # do block
-            event.set("EventMessage", eventMessage)
-            @logger.debug("pretty print end. result: " + event.get("EventMessage").to_s)
-          end
+    results_found = @query.run(->(entity) {
+      event = LogStash::Event.new(entity.properties)
+      event.set("type", @table_name)
+
+      # Help pretty print etw files
+      if (@etw_pretty_print && !event.get("EventMessage").nil? && !event.get("Message").nil?)
+        @logger.debug("event: " + event.to_s)
+        eventMessage = event.get("EventMessage").to_s
+        message = event.get("Message").to_s
+        @logger.debug("EventMessage: " + eventMessage)
+        @logger.debug("Message: " + message)
+        if (eventMessage.include? "%")
+          @logger.debug("starting pretty print")
+          toReplace = eventMessage.scan(/%\d+/)
+          payload = message.scan(/(?<!\\S)([a-zA-Z]+)=(\"[^\"]*\")(?!\\S)/)
+          # Split up the format string to seperate all of the numbers
+          toReplace.each do |key|
+            @logger.debug("Replacing key: " + key.to_s)
+            index = key.scan(/\d+/).join.to_i
+            newValue = payload[index - 1][1]
+            @logger.debug("New Value: " + newValue)
+            eventMessage[key] = newValue
+          end # do block
+          event.set("EventMessage", eventMessage)
+          @logger.debug("pretty print end. result: " + event.get("EventMessage").to_s)
         end
-        decorate(event)
-        if event.get('PreciseTimeStamp').is_a?(Time)
-          event.set('PreciseTimeStamp', LogStash::Timestamp.new(event.get('PreciseTimeStamp')))
-        end
-        theTIMESTAMP = event.get('TIMESTAMP')
-        if theTIMESTAMP.is_a?(LogStash::Timestamp)
-          last_good_timestamp = theTIMESTAMP.to_iso8601
-        elsif theTIMESTAMP.is_a?(Time)
-          last_good_timestamp = theTIMESTAMP.iso8601
-          event.set('TIMESTAMP', LogStash::Timestamp.new(theTIMESTAMP))
-        else
-          @logger.warn("Found result with invalid TIMESTAMP. " + event.to_hash.to_s)
-        end
-        output_queue << event
-      end # each block
-      @idle_delay = 0
+      end
+      decorate(event)
+      if event.get('PreciseTimeStamp').is_a?(Time)
+        event.set('PreciseTimeStamp', LogStash::Timestamp.new(event.get('PreciseTimeStamp')))
+      end
+      theTIMESTAMP = event.get('TIMESTAMP')
+      if theTIMESTAMP.is_a?(LogStash::Timestamp)
+        last_good_timestamp = theTIMESTAMP.to_iso8601
+      elsif theTIMESTAMP.is_a?(Time)
+        last_good_timestamp = theTIMESTAMP.iso8601
+        event.set('TIMESTAMP', LogStash::Timestamp.new(theTIMESTAMP))
+      else
+        @logger.warn("Found result with invalid TIMESTAMP. " + event.to_hash.to_s)
+      end
+      output_queue << event
+    })
+    @query = nil
+    
+    if results_found
       if (!last_good_timestamp.nil?)
-        @last_timestamp = last_good_timestamp unless @continuation_token
+        @last_timestamp = last_good_timestamp
       end
     else
       @logger.debug("No new results found.")
-      @idle_delay = @idle_delay_seconds
     end # if block
 
   rescue => e
-    @logger.error("Oh My, An error occurred.", :exception => e)
+    @logger.error("Oh My, An error occurred. Error:#{e}: Trace: #{e.backtrace}", :exception => e)
     raise
   end # process
 
@@ -176,3 +175,37 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
   end # to_ticks
 
 end # LogStash::Inputs::AzureWADTable
+
+class AzureQuery
+  def initialize(logger, azure_table_service, table_name, query_str, entity_count_to_process)
+    @logger = logger
+    @query_str = query_str
+    @entity_count_to_process = entity_count_to_process
+    @azure_table_service = azure_table_service
+    @table_name = table_name
+    @continuation_token = nil
+  end
+
+  def run(on_result_cbk)
+    results_found = false
+    @logger.debug("Query filter: " + @query_str)
+    begin
+      @logger.debug("Running query. continuation_token=#{@continuation_token}")
+      query = { :top => @entity_count_to_process, :filter => @query_str, :continuation_token => @continuation_token }
+      result = @azure_table_service.query_entities(@table_name, query)
+
+      if result and result.length > 0
+        results_found = true
+        @logger.debug("#{result.length} results found.")
+        result.each do |entity|
+          on_result_cbk.call(entity)
+        end
+      end
+
+      @continuation_token = result.continuation_token
+    end until !@continuation_token
+
+    return results_found
+  end
+
+end
