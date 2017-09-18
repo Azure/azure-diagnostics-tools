@@ -3,6 +3,7 @@ require "logstash/inputs/base"
 require "logstash/namespace"
 require "time"
 require "azure/storage"
+require "set"
 
 class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
   class Interrupted < StandardError; end
@@ -21,7 +22,11 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
 
   # Default 1 minute delay to ensure all data is published to the table before querying.
   # See issue #23 for more: https://github.com/Azure/azure-diagnostics-tools/issues/23
+  # TODO: remove this
   config :data_latency_minutes, :validate => :number, :default => 1
+
+  # Number of past queries to be run, so we don't miss late arriving data
+  config :past_queries_count, :validate => :number, :default => 5
 
   TICKS_SINCE_EPOCH = Time.utc(0001, 01, 01).to_i * 10000000
 
@@ -43,7 +48,7 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
 
     @last_timestamp = @collection_start_time_utc
     @idle_delay = @idle_delay_seconds
-    @query = nil
+    @duplicate_detector = DuplicateDetector.new(@logger, @past_queries_count)
   end # register
 
   public
@@ -67,7 +72,7 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
       query_filter << " or (PartitionKey gt '#{i.to_s.rjust(19, '0')}___#{partitionkey_from_datetime(@last_timestamp)}' and PartitionKey lt '#{i.to_s.rjust(19, '0')}___#{partitionkey_from_datetime(@until_timestamp)}')"
     end # for block
     query_filter = query_filter.gsub('"','')
-    query_filter
+    return query_filter, @last_timestamp.to_s << "-" << @until_timestamp.to_s
   end
 
   def build_zero_latency_query
@@ -78,23 +83,22 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
       query_filter << " or (PartitionKey gt '#{i.to_s.rjust(19, '0')}___#{partitionkey_from_datetime(@last_timestamp)}' and PartitionKey lt '#{i.to_s.rjust(19, '0')}___9999999999999999999')"
     end # for block
     query_filter = query_filter.gsub('"','')
-    query_filter
+    return query_filter, last_timestamp.to_s << "-now"
   end
 
   def process(output_queue)
     if @data_latency_minutes > 0
       @until_timestamp = (Time.now - (60 * @data_latency_minutes)).iso8601
-      query_filter = build_latent_query
+      query_filter, query_id = build_latent_query
     else
-      query_filter = build_zero_latency_query
+      query_filter, query_id = build_zero_latency_query
     end
 
     last_good_timestamp = nil
-    if @query.nil?
-      @query = AzureQuery.new(@logger, @azure_table_service, @table_name, query_filter, @entity_count_to_process)
-    end
+    query = AzureQuery.new(@logger, @azure_table_service, @table_name, query_filter, query_id, @entity_count_to_process)
 
-    results_found = @query.run(->(entity) {
+    filter_result = @duplicate_detector.filter_duplicates(query,->(entity) {
+      #@logger.debug("new event")
       event = LogStash::Event.new(entity.properties)
       event.set("type", @table_name)
 
@@ -136,15 +140,15 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
       end
       output_queue << event
     })
-    @query = nil
-    
-    if results_found
+
+    if filter_result
       if (!last_good_timestamp.nil?)
         @last_timestamp = last_good_timestamp
       end
     else
       @logger.debug("No new results found.")
-    end # if block
+      @last_timestamp = (DateTime.iso8601(@until_timestamp).to_time - 1).iso8601
+    end
 
   rescue => e
     @logger.error("Oh My, An error occurred. Error:#{e}: Trace: #{e.backtrace}", :exception => e)
@@ -158,7 +162,7 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
   def partitionkey_from_datetime(time_string)
     collection_time = Time.parse(time_string)
     if collection_time
-      @logger.debug("collection time parsed successfully #{collection_time}")
+      #@logger.debug("collection time parsed successfully #{collection_time}")
     else
       raise(ArgumentError, "Could not parse the time_string")
     end # if else block
@@ -170,33 +174,42 @@ class LogStash::Inputs::AzureWADTable < LogStash::Inputs::Base
 
   # Convert time to ticks
   def to_ticks(time_to_convert)
-    @logger.debug("Converting time to ticks")
+    #@logger.debug("Converting time to ticks")
     time_to_convert.to_i * 10000000 - TICKS_SINCE_EPOCH
   end # to_ticks
 
 end # LogStash::Inputs::AzureWADTable
 
 class AzureQuery
-  def initialize(logger, azure_table_service, table_name, query_str, entity_count_to_process)
+  def initialize(logger, azure_table_service, table_name, query_str, query_id, entity_count_to_process)
     @logger = logger
     @query_str = query_str
+    @query_id = query_id
     @entity_count_to_process = entity_count_to_process
     @azure_table_service = azure_table_service
     @table_name = table_name
     @continuation_token = nil
   end
 
+  def reset
+    @continuation_token = nil
+  end
+
+  def id
+    return @query_id
+  end
+
   def run(on_result_cbk)
     results_found = false
-    @logger.debug("Query filter: " + @query_str)
+    @logger.debug("[#{@query_id}]Query filter: " + @query_str)
     begin
-      @logger.debug("Running query. continuation_token=#{@continuation_token}")
+      @logger.debug("[#{@query_id}]Running query. continuation_token=#{@continuation_token}")
       query = { :top => @entity_count_to_process, :filter => @query_str, :continuation_token => @continuation_token }
       result = @azure_table_service.query_entities(@table_name, query)
 
       if result and result.length > 0
         results_found = true
-        @logger.debug("#{result.length} results found.")
+        @logger.debug("[#{@query_id}] #{result.length} results found.")
         result.each do |entity|
           on_result_cbk.call(entity)
         end
@@ -206,6 +219,85 @@ class AzureQuery
     end until !@continuation_token
 
     return results_found
+  end
+end
+
+class QueryData
+  def initialize(logger, query)
+    @logger = logger
+    @query = query
+    @results_cache = Set.new
+  end
+
+  def id
+    return @query.id
+  end
+
+  def get_unique_id(entity)
+    uniqueId = ""
+    partitionKey = entity.properties["PartitionKey"]
+    rowKey = entity.properties["RowKey"]
+    uniqueId << partitionKey << rowKey
+    return uniqueId
+  end
+
+  def run_query
+    results = []
+    @query.reset
+    @query.run( ->(entity) {
+      uniqueId = get_unique_id(entity)
+
+      if @results_cache.add?(uniqueId).nil?
+        @logger.debug("[#{@query.id}][QueryData] #{uniqueId} already processed")
+      else
+        @logger.debug("[#{@query.id}][QueryData] #{uniqueId} new item")
+        results.push(entity)
+      end
+    })
+    return results
+  end
+
+  def has_entity(entity)
+    return @results_cache.include?(get_unique_id(entity))
+  end
+
+end
+
+class DuplicateDetector
+  def initialize(logger, past_queries_count)
+    @logger = logger
+    @past_queries_count = past_queries_count
+    @query_cache = []
+  end
+
+  def filter_duplicates(query, on_new_item_ckb)
+    #push in front, pop from the back
+    latest_query = QueryData.new(@logger, query)
+    @query_cache.insert(0, latest_query)
+
+    #TODO: split first query
+    found_new_items = false
+
+    # results is most likely empty or has very few items for older queries (most or all should be de-duplicated by run_query)
+    @query_cache.each do |query_data|
+      results = query_data.run_query()
+      results.each do |entity|
+        is_new = true
+        unique_id = query_data.get_unique_id(entity)
+
+        found_new_items = true
+        @logger.debug("[#{query_data.id}][filter_duplicates] #{unique_id} new item")
+        on_new_item_ckb.call(entity)
+      end
+    end
+
+    @logger.debug("Query Cache length: #{@query_cache.length}")
+    until @query_cache.length <= @past_queries_count do
+      @query_cache.pop
+      @logger.debug("New Query Cache length: #{@query_cache.length}")
+    end
+
+    return found_new_items
   end
 
 end

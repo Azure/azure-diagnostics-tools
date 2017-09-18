@@ -48,6 +48,9 @@ __*endpoint*__
 
 Specifies the endpoint of Azure environment. The default value is "core.windows.net".  
 
+__*past_queries_count*__
+Specifies the number of past queries to run so the plugin doesn't miss late arriving data. By default this is 5
+
 ### Examples
 ```
 input
