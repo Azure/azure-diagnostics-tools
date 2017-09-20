@@ -72,15 +72,11 @@ __*blob_list_page_size*__
 
 Specifies the page-size for returned blob items. Too big number will hit heap overflow; Too small number will leads to too many requests. The default of `100` is good for heap size of 1G.
 
-__*break_json_down_policy*__
+__*file_chunk_size_bytes*__
 
-Only works when the codec is set to `json`. Sets the policy to break the json object in the array into small events. Break json into small sections will not be as efficient as keep it as a whole, but will reduce the usage of the memory. Possible options: `do_not_break`, `with_head_tail`, `without_head_tail`. 
+Specifies the buffer size used to download the blob content. This is also the maximum buffer size that will be passed to a codec except for JSON. The JSON codec will only receive valid JSON that might span between multiple chunks. Any malformed JSON content will be skipped.
 
-The default value is: `do_not_break`.
-
-__*break_json_batch_count*__
-
-Only works when the codec is set to `json`. Sets when break json happens, how many json object will be put in 1 batch. The bigger this is set, more memory is taken and the bigger the json will be handing to the codec. This is useful when we need to break the big json array into small pieces. Set to `1` when expect to send json 1 by 1 in the array.
+The default value is 4194304 (4MB)
 
 ### Examples
 
