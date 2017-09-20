@@ -115,12 +115,15 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
 
   public
   def register
+    user_agent = "logstash-input-azureblob"
+    user_agent << "/" << Gem.latest_spec_for("logstash-input-azureblob").version.to_s
+    
     # this is the reader # for this specific instance.
     @reader = SecureRandom.uuid
     @registry_locker = "#{@registry_path}.lock"
    
     # Setup a specific instance of an Azure::Storage::Client
-    client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}")
+    client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}", :user_agent_prefix => user_agent)
     # Get an azure storage blob service object from a specific instance of an Azure::Storage::Client
     @azure_blob = client.blob_client
     # Add retry filter to the service object
