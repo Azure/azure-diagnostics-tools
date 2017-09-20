@@ -109,6 +109,10 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   # Constant of max integer
   MAX = 2 ** ([42].pack('i').size * 16 -2 ) -1
 
+  # 4MB
+  MAX_BUFFER_SIZE = 4 * 1024 * 1024 
+
+
   public
   def register
     # this is the reader # for this specific instance.
@@ -121,14 +125,16 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
     @azure_blob = client.blob_client
     # Add retry filter to the service object
     @azure_blob.with_filter(Azure::Storage::Core::Filter::ExponentialRetryPolicyFilter.new)
+
+    @sleep_interval = @interval
   end # def register
 
   def run(queue)
     # we can abort the loop if stop? becomes true
     while !stop?
       process(queue)
-      @logger.debug("Hitting interval of #{@interval}ms . . .")
-      Stud.stoppable_sleep(@interval) { stop? }
+      @logger.debug("Hitting interval of #{@sleep_interval}ms . . .")
+      Stud.stoppable_sleep(@sleep_interval) { stop? }
     end # loop
   end # def run
 
@@ -159,7 +165,15 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
             start_index = 0 if start_index < 0
           end
 
-          blob, content = @azure_blob.get_blob(@container, blob_name, {:start_range => start_index} )
+          blob_size = blob.properties[:content_length]
+          end_index = start_index + MAX_BUFFER_SIZE - 1
+          @sleep_interval = 0
+          if blob_size < end_index + 1
+            end_index = blob_size - 1
+            @sleep_interval = @interval
+          end
+
+          blob, content = @azure_blob.get_blob(@container, blob_name, {:start_range => start_index, :end_range => end_index } )
 
           # content will be used to calculate the new offset. Create a new variable for processed content.
           content_length = content.length unless content.nil?
