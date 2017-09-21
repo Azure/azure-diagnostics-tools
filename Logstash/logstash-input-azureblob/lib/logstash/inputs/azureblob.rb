@@ -128,16 +128,15 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
     @azure_blob = client.blob_client
     # Add retry filter to the service object
     @azure_blob.with_filter(Azure::Storage::Core::Filter::ExponentialRetryPolicyFilter.new)
-
-    @sleep_interval = @interval
   end # def register
 
   def run(queue)
     # we can abort the loop if stop? becomes true
     while !stop?
-      process(queue)
-      @logger.debug("Hitting interval of #{@sleep_interval}ms . . .")
-      Stud.stoppable_sleep(@sleep_interval) { stop? }
+      if !process(queue)
+        @logger.debug("Hitting interval of #{@interval}ms . . .")
+        Stud.stoppable_sleep(@interval) { stop? }
+      end
     end # loop
   end # def run
 
@@ -148,6 +147,8 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   # Start processing the next item.
   def process(queue)
     begin
+      is_more_processing_required = false
+
       blob, start_index, gen = register_for_read
 
       if(!blob.nil?)
@@ -169,11 +170,11 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
           end
 
           blob_size = blob.properties[:content_length]
-          end_index = start_index + MAX_BUFFER_SIZE - 1
-          @sleep_interval = 0
-          if blob_size < end_index + 1
+          if blob_size > start_index + MAX_BUFFER_SIZE
+            end_index = start_index + MAX_BUFFER_SIZE - 1
+            is_more_processing_required = true
+          else
             end_index = blob_size - 1
-            @sleep_interval = @interval
           end
 
           blob, content = @azure_blob.get_blob(@container, blob_name, {:start_range => start_index, :end_range => end_index } )
@@ -228,6 +229,8 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       end # if
     rescue StandardError => e
       @logger.error("Oh My, An error occurred. \nError:#{e}:\nTrace:\n#{e.backtrace}", :exception => e)
+    ensure
+      return is_more_processing_required
     end # begin
   end # process
   
