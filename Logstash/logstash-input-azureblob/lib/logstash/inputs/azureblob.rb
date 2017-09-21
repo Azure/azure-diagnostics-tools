@@ -109,14 +109,21 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   # Constant of max integer
   MAX = 2 ** ([42].pack('i').size * 16 -2 ) -1
 
+  # 4MB
+  MAX_BUFFER_SIZE = 4 * 1024 * 1024 
+
+
   public
   def register
+    user_agent = "logstash-input-azureblob"
+    user_agent << "/" << Gem.latest_spec_for("logstash-input-azureblob").version.to_s
+    
     # this is the reader # for this specific instance.
     @reader = SecureRandom.uuid
     @registry_locker = "#{@registry_path}.lock"
    
     # Setup a specific instance of an Azure::Storage::Client
-    client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}")
+    client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}", :user_agent_prefix => user_agent)
     # Get an azure storage blob service object from a specific instance of an Azure::Storage::Client
     @azure_blob = client.blob_client
     # Add retry filter to the service object
@@ -126,9 +133,10 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   def run(queue)
     # we can abort the loop if stop? becomes true
     while !stop?
-      process(queue)
-      @logger.debug("Hitting interval of #{@interval}ms . . .")
-      Stud.stoppable_sleep(@interval) { stop? }
+      if !process(queue)
+        @logger.debug("Hitting interval of #{@interval}ms . . .")
+        Stud.stoppable_sleep(@interval) { stop? }
+      end
     end # loop
   end # def run
 
@@ -139,6 +147,8 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   # Start processing the next item.
   def process(queue)
     begin
+      is_more_processing_required = false
+
       blob, start_index, gen = register_for_read
 
       if(!blob.nil?)
@@ -159,7 +169,15 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
             start_index = 0 if start_index < 0
           end
 
-          blob, content = @azure_blob.get_blob(@container, blob_name, {:start_range => start_index} )
+          blob_size = blob.properties[:content_length]
+          if blob_size > start_index + MAX_BUFFER_SIZE
+            end_index = start_index + MAX_BUFFER_SIZE - 1
+            is_more_processing_required = true
+          else
+            end_index = blob_size - 1
+          end
+
+          blob, content = @azure_blob.get_blob(@container, blob_name, {:start_range => start_index, :end_range => end_index } )
 
           # content will be used to calculate the new offset. Create a new variable for processed content.
           content_length = content.length unless content.nil?
@@ -211,6 +229,8 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       end # if
     rescue StandardError => e
       @logger.error("Oh My, An error occurred. \nError:#{e}:\nTrace:\n#{e.backtrace}", :exception => e)
+    ensure
+      return is_more_processing_required
     end # begin
   end # process
   
