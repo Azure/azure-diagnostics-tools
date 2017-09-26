@@ -134,3 +134,4 @@ _NCrunch*
 
 # Ruby gem build output
 *.gem
+Logstash/logstash-input-azureblob/lib/logstash-input-azureblob_jars\.rb
