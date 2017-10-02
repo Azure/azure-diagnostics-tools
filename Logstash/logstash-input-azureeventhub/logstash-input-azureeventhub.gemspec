@@ -24,6 +24,6 @@ Gem::Specification.new do |s|
     s.add_development_dependency 'logstash-devutils'
   
   #Jar dependencies
-  s.requirements << "jar 'com.microsoft.azure:azure-eventhubs', '0.14.5'"
+  s.requirements << "jar 'com.microsoft.azure:azure-eventhubs', '0.15.0'"
   s.add_runtime_dependency 'jar-dependencies', '~> 0.3.2'
 end

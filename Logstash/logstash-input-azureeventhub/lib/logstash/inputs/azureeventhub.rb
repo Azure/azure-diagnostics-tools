@@ -39,6 +39,9 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
 
   public
   def register
+    user_agent = "logstash-input-azureeventhub"
+    user_agent << "/" << Gem.latest_spec_for("logstash-input-azureeventhub").version.to_s
+    com::microsoft::azure::eventhubs::EventHubClient.userAgent = user_agent
   end # def register
 
   def process(output_queue, receiver, partition, last_event_offset)
@@ -82,7 +85,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
     while !stop?
       begin
         host = java::net::URI.new("amqps://" << @namespace << "." << @domain)
-        connStr = com::microsoft::azure::servicebus::ConnectionStringBuilder.new(host, @eventhub, @username, @key).toString()
+        connStr = com::microsoft::azure::eventhubs::ConnectionStringBuilder.new(host, @eventhub, @username, @key).toString()
         ehClient = com::microsoft::azure::eventhubs::EventHubClient.createFromConnectionStringSync(connStr)
 
         if !epoch.nil?
@@ -106,7 +109,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
         receiver.setPrefetchCount(@receive_credits)
 
         last_event_offset = process(output_queue, receiver, partition, last_event_offset)
-      rescue com::microsoft::azure::servicebus::ServiceBusException => e
+      rescue com::microsoft::azure::eventhubs::EventHubException => e
         sleep(@thread_wait_sec)
         @logger.debug("[#{partition.to_s.rjust(2,"0")}] resetting connection. Error:#{e}: Trace: #{e.backtrace}", :exception => e)
       end
