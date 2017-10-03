@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-input-azureblob'
-  s.version       = '0.9.11'
+  s.version       = '0.9.12'
   s.platform      = "java"
   s.licenses      = ['Apache License (2.0)']
   s.summary       = 'This plugin collects Microsoft Azure Diagnostics data from Azure Storage Blobs.'
@@ -27,7 +27,6 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'logging'
 
   # Jar dependencies
-  #s.requirements << "jar 'javax.json:javax.json-api', '1.1'"
   s.requirements << "jar 'org.glassfish:javax.json', '1.1'"
-  s.add_runtime_dependency 'jar-dependencies'#, '~> 0.3.2'
+  s.add_runtime_dependency 'jar-dependencies'
 end
