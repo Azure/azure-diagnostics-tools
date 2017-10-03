@@ -59,9 +59,6 @@ class JsonParser
     while @parser.hasNext
       event = @parser.next
   
-      stream_offset = @parser.getLocation().getStreamOffset()
-  
-  
       if event == javax::json::stream::JsonParser::Event::START_OBJECT
         depth = depth + 1
       elsif event == javax::json::stream::JsonParser::Event::END_OBJECT
