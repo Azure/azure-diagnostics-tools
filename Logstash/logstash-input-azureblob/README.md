@@ -203,9 +203,6 @@ input {
          # Typical numbers could be 21/9 or 12/2 depends on the nsg log file types
          file_head_bytes => 21
          file_tail_bytes => 9
-         # Enable / tweak these settings when event is too big for codec to handle.
-         # break_json_down_policy => "with_head_tail"
-         # break_json_batch_count => 2
      }
    }
 
