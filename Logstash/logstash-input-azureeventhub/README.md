@@ -64,6 +64,7 @@ __*partition_receiver_epochs*__
 A map from partition (string) to epoch (integer). By default each partition doesn't have an epoch defined. For more information read https://blogs.msdn.microsoft.com/gyan/2014/09/02/event-hubs-receiver-epoch/ .
 
 ### Examples
+* Bare-bone settings
 ```
 input
 {
@@ -75,6 +76,30 @@ input
         eventhub => "myeventhub"
         partitions => 4
         partition_receiver_epochs => { '2' => 42 '0' => 15 }
+    }
+}
+```
+
+* Example for WAD (Azure Diagnostics)
+```
+input
+{
+    azureeventhub
+    {
+        key => "VGhpcyBpcyBhIGZha2Uga2V5Lg=="
+        username => "receivepolicy"
+        namespace => "mysbns"
+        eventhub => "myeventhub"
+        partitions => 4
+        partition_receiver_epochs => { '2' => 42 '0' => 15 }
+    }
+}
+filter {
+    split {field => 'records'} #split the records array in individual events
+}
+output {
+    stdout { 
+        codec => rubydebug
     }
 }
 ```
