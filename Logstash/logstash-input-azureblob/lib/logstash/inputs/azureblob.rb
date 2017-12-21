@@ -122,11 +122,11 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   def register
     user_agent = "logstash-input-azureblob"
     user_agent << "/" << Gem.latest_spec_for("logstash-input-azureblob").version.to_s
-    
+
     # this is the reader # for this specific instance.
     @reader = SecureRandom.uuid
     @registry_locker = "#{@registry_path}.lock"
-   
+
     # Setup a specific instance of an Azure::Storage::Client
     client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}", :user_agent_prefix => user_agent)
     # Get an azure storage blob service object from a specific instance of an Azure::Storage::Client
@@ -147,14 +147,14 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   def stop
     cleanup_registry
   end # def stop
-  
+
   # Start processing the next item.
   def process(queue)
     begin
       @processed_entries = 0
       blob, start_index, gen = register_for_read
 
-      if(!blob.nil?)
+      unless blob.nil?
         begin
           blob_name = blob.name
           @logger.debug("Processing blob #{blob.name}")
@@ -219,16 +219,16 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       #skip some unnecessary copying
       full_content = content
     else
-      full_content = ""
+      full_content = ''
       full_content << header unless header.nil? || header.length == 0
       full_content << content
       full_content << tail unless tail.nil? || tail.length == 0
     end
-    
+
     @codec.decode(full_content) do |event|
       decorate(event)
       queue << event
-    end 
+    end
   end
 
   def on_entry_processed(start_index, content_length, blob_name, new_etag, gen)
@@ -237,7 +237,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       request_registry_update(start_index, content_length, blob_name, new_etag, gen)
     end
   end
-  
+
   def request_registry_update(start_index, content_length, blob_name, new_etag, gen)
     new_offset = start_index
     new_offset = new_offset + content_length unless content_length.nil?
@@ -326,11 +326,11 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   def register_for_read
     begin
       all_blobs = list_all_blobs
-      registry = all_blobs.find { |item| item.name.downcase == @registry_path  }
+      registry = all_blobs.find { |item| item.name.downcase == @registry_path }
       registry_locker = all_blobs.find { |item| item.name.downcase == @registry_locker }
 
-      candidate_blobs = all_blobs.select { |item| (item.name.downcase != @registry_path) && ( item.name.downcase != @registry_locker ) }
-      
+      candidate_blobs = all_blobs.select { |item| (item.name.downcase != @registry_path) && (item.name.downcase != @registry_locker) }
+
       start_index = 0
       gen = 0
       lease = nil
@@ -346,7 +346,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       else
         registry_hash = load_registry
       end #if
-        
+
       picked_blobs = Set.new []
       # Pick up the next candidate
       picked_blob = nil
@@ -367,18 +367,18 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       }
 
       picked_blob = picked_blobs.min_by { |b| registry_hash[b.name].gen }
-      if !picked_blob.nil?
+      unless picked_blob.nil?
         registry_item = registry_hash[picked_blob.name]
         registry_item.reader = @reader
         registry_hash[picked_blob.name] = registry_item
         start_index = registry_item.offset
         raise_gen(registry_hash, picked_blob.name)
         gen = registry_item.gen
-      end #if
+      end # unless
 
-      # Save the chnage for the registry
+      # Save the change for the registry
       save_registry(registry_hash)
-      
+
       @azure_blob.release_blob_lease(@container, @registry_locker, lease)
       lease = nil;
 
@@ -393,7 +393,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   end #register_for_read
 
   # Update the registry
-  def update_registry (registry_item)
+  def update_registry(registry_item)
     begin
       lease = nil
       lease = acquire_lease(@registry_locker)
@@ -435,13 +435,13 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
     registry_hash = Hash.new
 
     blob_items.each do |blob_item|
-        initial_offset = 0
-        initial_offset = blob_item.properties[:content_length] if @registry_create_policy == 'resume'
-        registry_item = LogStash::Inputs::RegistryItem.new(blob_item.name, blob_item.properties[:etag], nil, initial_offset, 0)
+      initial_offset = 0
+      initial_offset = blob_item.properties[:content_length] if @registry_create_policy == 'resume'
+      registry_item = LogStash::Inputs::RegistryItem.new(blob_item.name, blob_item.properties[:etag], nil, initial_offset, 0)
       registry_hash[blob_item.name] = registry_item
     end # each
     save_registry(registry_hash)
-    return registry_hash
+    registry_hash
   end # create_registry
 
   # Load the content of the registry into the registry hash and return it.
@@ -449,7 +449,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
     # Get content
     registry_blob, registry_blob_body = @azure_blob.get_blob(@container, @registry_path)
     registry_hash = deserialize_registry_hash(registry_blob_body)
-    return registry_hash
+    registry_hash
   end # def load_registry
 
   # Serialize the registry hash and save it.
