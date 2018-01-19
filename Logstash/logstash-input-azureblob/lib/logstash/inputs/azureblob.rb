@@ -404,7 +404,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
   # Clean up the registry.
   def cleanup_registry
     begin
-      @logger.warn("Cleaning up registry")
+      @logger.debug("azureblob : start cleanup_registry")
       lease = nil
       lease = acquire_lease(@registry_path)
       registry_hash = load_registry
@@ -420,7 +420,7 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
       @azure_blob.release_blob_lease(@container, @registry_path, lease) unless lease.nil?
       lease = nil
     end #rescue
-    @logger.warn("End of cleaning up registry")
+    @logger.debug("azureblob : End of cleanup_registry")
   end # def cleanup_registry
 
   # Create a registry file to coordinate between multiple azure blob inputs.
