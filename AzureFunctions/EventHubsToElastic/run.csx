@@ -4,6 +4,7 @@ using System;
 using System.Configuration;
 using Elasticsearch.Net;
 using Nest;
+using Nest.JsonNetSerializer;
 
 public static async Task Run(string myEventHubMessage, TraceWriter log)
 {
@@ -25,7 +26,7 @@ private const string Setting_Es_Index_Name_Prefix = "es_index_name_prefix";
 private const string Error_Es_Uri_Missing = "Setting \"" + Setting_Es_Uri + "\" is missing.";
 private const string Error_Es_Username_Missing = "Setting \"" + Setting_Es_Username + "\" is missing.";
 private const string Error_Es_Password_Missing = "Setting \"" + Setting_Es_Password + "\" is missing.";
-private const string DefaultIndexNamePrefix = "wadeventhub";
+private const string DefaultIndexNamePrefix = "debug";
 private const string EventDocumentTypeName = "event";
 
 // Caches the last index name used so we don't have to do the check each time before sending data to ES.
@@ -61,8 +62,9 @@ private static async Task SendEventToElasticSearch(string myEventHubMessage, Tra
 
     log.Verbose($"Sending Event Hub data to ElasticSearch at {esUri} ...");
 
-    ConnectionSettings connectionSettings = new ConnectionSettings(new Uri(esUri)).BasicAuthentication(username, password);
-    ElasticClient client = new ElasticClient(connectionSettings);
+    var pool = new SingleNodeConnectionPool(new Uri(esUri));
+    var connectionSettings = new ConnectionSettings(pool, sourceSerializer: JsonNetSerializer.Default).BasicAuthentication(username, password);
+    var client = new ElasticClient(connectionSettings);
 
     string currentIndexName = GetIndexName(indexNamePrefix);
 
@@ -72,13 +74,13 @@ private static async Task SendEventToElasticSearch(string myEventHubMessage, Tra
         LastIndexName = currentIndexName;
     }
 
-    var data = new PostData<string>(myEventHubMessage);
-    var result = await client.LowLevel.IndexAsync<string>(currentIndexName, EventDocumentTypeName, data);
+    var result = client.LowLevel.Index<BytesResponse>(currentIndexName, EventDocumentTypeName, myEventHubMessage);
 
     if (result.Success)
     {
         log.Info("Data successfully sent.");
-        log.Verbose(result.Body);
+        var body = System.Text.Encoding.Default.GetString(result.Body);
+        log.Verbose(body);
     }
     else
     {
@@ -112,17 +114,19 @@ private static async Task EnsureIndexExists(string currentIndexName, ElasticClie
     {
         ReportError(log, $"Index exists check failed.{Environment.NewLine}{existsResult.DebugInformation}", throwException: true);
     }
-
     if (existsResult.Exists)
     {
+        log.Info(currentIndexName + " - Index Exists.");
         return;
     }
 
     // TODO: allow the consumer to fine-tune index settings 
     IndexState indexState = new IndexState();
-    indexState.Settings.NumberOfReplicas = 1;
-    indexState.Settings.NumberOfShards = 5;
+    indexState.Settings = new IndexSettings();
+    indexState.Settings.NumberOfReplicas = 0;
+    indexState.Settings.NumberOfShards = 1;
     indexState.Settings.Add("refresh_interval", "15s");
+
 
     ICreateIndexResponse createIndexResult = await esClient.CreateIndexAsync(currentIndexName, c => c.InitializeUsing(indexState));
 
