@@ -26,7 +26,7 @@ private const string Setting_Es_Index_Name_Prefix = "es_index_name_prefix";
 private const string Error_Es_Uri_Missing = "Setting \"" + Setting_Es_Uri + "\" is missing.";
 private const string Error_Es_Username_Missing = "Setting \"" + Setting_Es_Username + "\" is missing.";
 private const string Error_Es_Password_Missing = "Setting \"" + Setting_Es_Password + "\" is missing.";
-private const string DefaultIndexNamePrefix = "debug";
+private const string DefaultIndexNamePrefix = "wadeventhub";
 private const string EventDocumentTypeName = "event";
 
 // Caches the last index name used so we don't have to do the check each time before sending data to ES.
@@ -123,8 +123,8 @@ private static async Task EnsureIndexExists(string currentIndexName, ElasticClie
     // TODO: allow the consumer to fine-tune index settings 
     IndexState indexState = new IndexState();
     indexState.Settings = new IndexSettings();
-    indexState.Settings.NumberOfReplicas = 0;
-    indexState.Settings.NumberOfShards = 1;
+    indexState.Settings.NumberOfReplicas = 1;
+    indexState.Settings.NumberOfShards = 5;
     indexState.Settings.Add("refresh_interval", "15s");
 
 
