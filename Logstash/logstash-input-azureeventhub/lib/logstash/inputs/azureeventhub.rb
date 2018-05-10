@@ -31,11 +31,14 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   config :thread_wait_sec, :validate => :number, :default => 5
 
   config :partition_receiver_epochs, :validate => :hash, :default => {}
+  config :partition_list , :validate => :array , :default => []
   
   
   def initialize(*args)
     super(*args)
     @@executor = java::util::concurrent::Executors.newCachedThreadPool()
+    @partition_list = (0..(@partitions-1)).to_a if @partition_list.empty?
+    @logger.info("configured eventhub partition list" , :partition_list => @partition_list )
   end # def initialize
 
   public
@@ -130,7 +133,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   public
   def run(output_queue)
     threads = []
-    (0..(@partitions-1)).each do |p_id|
+    @partition_list.each do |p_id|
       epoch = partition_receiver_epochs[p_id.to_s] if @partition_receiver_epochs.key?(p_id.to_s)
       threads << Thread.new { process_partition(output_queue, p_id, epoch) }
     end

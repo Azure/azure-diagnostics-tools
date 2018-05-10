@@ -59,6 +59,13 @@ __*thread_wait_sec*__
 
 Specifies the time (in seconds) to wait before another try if no message was received.
 
+__*partition_list*__
+
+Specifies a partition array subset to fetch events from. Default value is range from 0 to the configured partition count.
+```ruby
+(0..(@partitions-1))
+```
+
 __*partition_receiver_epochs*__
 
 A map from partition (string) to epoch (integer). By default each partition doesn't have an epoch defined. For more information read https://blogs.msdn.microsoft.com/gyan/2014/09/02/event-hubs-receiver-epoch/ .
