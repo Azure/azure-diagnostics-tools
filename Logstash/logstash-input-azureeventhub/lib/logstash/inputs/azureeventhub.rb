@@ -32,6 +32,8 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
 
   config :partition_receiver_epochs, :validate => :hash, :default => {}
   config :partition_list , :validate => :array , :default => []
+
+  config :decorate_events, :validate => :boolean, :default => false
   
   
   def initialize(*args)
@@ -66,6 +68,11 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
 
             codec.decode(body) do |event|
               decorate(event)
+              if @decorate_events
+                event.set("[@metadata][azure_eventhub][enqueued_time]", props.getEnqueuedTime().toString())
+                event.set("[@metadata][azure_eventhub][properties]", props.toString())
+                event.set("[@metadata][azure_eventhub][partition_id]", partition.to_s)
+              end
               output_queue << event
             end
           }
