@@ -35,13 +35,14 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   
   def initialize(*args)
     super(*args)
+    @@executor = java::util::concurrent::Executors.newCachedThreadPool()
   end # def initialize
 
   public
   def register
     user_agent = "logstash-input-azureeventhub"
     user_agent << "/" << Gem.latest_spec_for("logstash-input-azureeventhub").version.to_s
-    com::microsoft::azure::eventhubs::EventHubClient.userAgent = user_agent
+    com::microsoft::azure::eventhubs::impl::EventHubClientImpl.USER_AGENT = user_agent
   end # def register
 
   def process(output_queue, receiver, partition, last_event_offset)
@@ -85,24 +86,29 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
     while !stop?
       begin
         host = java::net::URI.new("amqps://" << @namespace << "." << @domain)
-        connStr = com::microsoft::azure::eventhubs::ConnectionStringBuilder.new(host, @eventhub, @username, @key).toString()
-        ehClient = com::microsoft::azure::eventhubs::EventHubClient.createFromConnectionStringSync(connStr)
+        connStr = com::microsoft::azure::eventhubs::ConnectionStringBuilder.new()
+          .setNamespaceName(@namespace)
+          .setEventHubName(@eventhub)
+          .setSasKeyName(@username)
+          .setSasKey(@key)
+          .toString()
+        ehClient = com::microsoft::azure::eventhubs::EventHubClient.createSync(connStr, @@executor)
 
         if !epoch.nil?
           if !last_event_offset.nil?
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & offset > #{last_event_offset}")
-            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, last_event_offset, false, epoch)
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromOffset(last_event_offset), epoch)
           else
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & timestamp > #{@time_since_epoch_millis}")
-            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis), epoch)
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromEnqueuedTime(java::time::Instant::ofEpochMilli(@time_since_epoch_millis)), epoch)
           end
         else
           if !last_event_offset.nil?
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with offset > #{last_event_offset}")
-            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, last_event_offset, false)
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromOffset(last_event_offset))
           else
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with timestamp > #{@time_since_epoch_millis}")
-            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis))
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromEnqueuedTime(java::time::Instant::ofEpochMilli(@time_since_epoch_millis)))
           end
         end
         receiver.setReceiveTimeout(java::time::Duration::ofSeconds(@thread_wait_sec));
