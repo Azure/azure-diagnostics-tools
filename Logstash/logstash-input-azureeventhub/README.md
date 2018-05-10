@@ -76,7 +76,7 @@ Adds eventhub metadata to event to event. Default value is false. Example decora
 ```ruby
 {
     "@metadata" => {
-        "azureeventhub" => {
+        "azure_eventhub" => {
             "partition_id" => "4",
             "enqueued_time" => "2018-05-10T05:27:25.196Z",
             "properties" => "{x-opt-sequence-number=2939844, x-opt-offset=627091016784, x-opt-partition-key=some_partition_key, x-opt-enqueued-time=Thu May 10 05:27:25 UTC 2018}"
