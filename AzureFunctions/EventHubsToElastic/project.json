@@ -2,7 +2,8 @@
   "frameworks": {
     "net46": {
       "dependencies": {
-        "NEST": "2.3.1"
+        "NEST": "6.0.2",
+        "NEST.JsonNetSerializer": "6.0.2"
       }
     }
   }
