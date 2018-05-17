@@ -21,9 +21,9 @@ Gem::Specification.new do |s|
   # Gem dependencies
   s.add_runtime_dependency "logstash-core-plugin-api", ">= 1.60", "<= 2.99"
   s.add_runtime_dependency 'azure', '~> 0.7.1'
-    s.add_development_dependency 'logstash-devutils'
+  s.add_development_dependency 'logstash-devutils'
   
   #Jar dependencies
-  s.requirements << "jar 'com.microsoft.azure:azure-eventhubs', '0.15.0'"
+  s.requirements << "jar 'com.microsoft.azure:azure-eventhubs', '1.0.1'"
   s.add_runtime_dependency 'jar-dependencies', '~> 0.3.2'
 end

@@ -59,9 +59,31 @@ __*thread_wait_sec*__
 
 Specifies the time (in seconds) to wait before another try if no message was received.
 
+__*partition_list*__
+
+Specifies a partition array subset to fetch events from. Default value is range from 0 to the configured partition count.
+```ruby
+(0..(@partitions-1))
+```
+
 __*partition_receiver_epochs*__
 
 A map from partition (string) to epoch (integer). By default each partition doesn't have an epoch defined. For more information read https://blogs.msdn.microsoft.com/gyan/2014/09/02/event-hubs-receiver-epoch/ .
+
+__*decorate_events*__
+
+Adds eventhub metadata to event to event. Default value is false. Example decoration:
+```ruby
+{
+    "@metadata" => {
+        "azure_eventhub" => {
+            "partition_id" => "4",
+            "enqueued_time" => "2018-05-10T05:27:25.196Z",
+            "properties" => "{x-opt-sequence-number=2939844, x-opt-offset=627091016784, x-opt-partition-key=some_partition_key, x-opt-enqueued-time=Thu May 10 05:27:25 UTC 2018}"
+        }
+    }
+}
+```
 
 ### Examples
 * Bare-bone settings

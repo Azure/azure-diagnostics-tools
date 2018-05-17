@@ -31,17 +31,23 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   config :thread_wait_sec, :validate => :number, :default => 5
 
   config :partition_receiver_epochs, :validate => :hash, :default => {}
+  config :partition_list , :validate => :array , :default => []
+
+  config :decorate_events, :validate => :boolean, :default => false
   
   
   def initialize(*args)
     super(*args)
+    @@executor = java::util::concurrent::Executors.newCachedThreadPool()
+    @partition_list = (0..(@partitions-1)).to_a if @partition_list.empty?
+    @logger.info("configured eventhub partition list" , :partition_list => @partition_list )
   end # def initialize
 
   public
   def register
     user_agent = "logstash-input-azureeventhub"
     user_agent << "/" << Gem.latest_spec_for("logstash-input-azureeventhub").version.to_s
-    com::microsoft::azure::eventhubs::EventHubClient.userAgent = user_agent
+    com::microsoft::azure::eventhubs::impl::EventHubClientImpl.USER_AGENT = user_agent
   end # def register
 
   def process(output_queue, receiver, partition, last_event_offset)
@@ -62,6 +68,11 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
 
             codec.decode(body) do |event|
               decorate(event)
+              if @decorate_events
+                event.set("[@metadata][azure_eventhub][enqueued_time]", props.getEnqueuedTime().toString())
+                event.set("[@metadata][azure_eventhub][properties]", props.toString())
+                event.set("[@metadata][azure_eventhub][partition_id]", partition.to_s)
+              end
               output_queue << event
             end
           }
@@ -85,24 +96,29 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
     while !stop?
       begin
         host = java::net::URI.new("amqps://" << @namespace << "." << @domain)
-        connStr = com::microsoft::azure::eventhubs::ConnectionStringBuilder.new(host, @eventhub, @username, @key).toString()
-        ehClient = com::microsoft::azure::eventhubs::EventHubClient.createFromConnectionStringSync(connStr)
+        connStr = com::microsoft::azure::eventhubs::ConnectionStringBuilder.new()
+          .setNamespaceName(@namespace)
+          .setEventHubName(@eventhub)
+          .setSasKeyName(@username)
+          .setSasKey(@key)
+          .toString()
+        ehClient = com::microsoft::azure::eventhubs::EventHubClient.createSync(connStr, @@executor)
 
         if !epoch.nil?
           if !last_event_offset.nil?
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & offset > #{last_event_offset}")
-            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, last_event_offset, false, epoch)
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromOffset(last_event_offset), epoch)
           else
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with epoch=#{epoch} & timestamp > #{@time_since_epoch_millis}")
-            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis), epoch)
+            receiver = ehClient.createEpochReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromEnqueuedTime(java::time::Instant::ofEpochMilli(@time_since_epoch_millis)), epoch)
           end
         else
           if !last_event_offset.nil?
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with offset > #{last_event_offset}")
-            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, last_event_offset, false)
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromOffset(last_event_offset))
           else
             @logger.debug("[#{partition.to_s.rjust(2,"0")}] Create receiver with timestamp > #{@time_since_epoch_millis}")
-            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, java::time::Instant::ofEpochMilli(@time_since_epoch_millis))
+            receiver = ehClient.createReceiverSync(@consumer_group, partition.to_s, com::microsoft::azure::eventhubs::EventPosition.fromEnqueuedTime(java::time::Instant::ofEpochMilli(@time_since_epoch_millis)))
           end
         end
         receiver.setReceiveTimeout(java::time::Duration::ofSeconds(@thread_wait_sec));
@@ -124,7 +140,7 @@ class LogStash::Inputs::Azureeventhub < LogStash::Inputs::Base
   public
   def run(output_queue)
     threads = []
-    (0..(@partitions-1)).each do |p_id|
+    @partition_list.each do |p_id|
       epoch = partition_receiver_epochs[p_id.to_s] if @partition_receiver_epochs.key?(p_id.to_s)
       threads << Thread.new { process_partition(output_queue, p_id, epoch) }
     end
