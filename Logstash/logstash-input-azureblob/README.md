@@ -262,5 +262,78 @@ input {
  } 
 ```
 
+* NSG flow logs version 2
+
+```yaml
+input {
+   azureblob
+   {
+     storage_account_name => "gcisnetwork15centralus"
+     storage_access_key => "oCgiebC1/UZ+RzTXelwQFDDCZUTCem5NLA2G1feLNwUW9O5r4ByLnM4WrSO3fc2QTn1NGLTauE2ljfGEnse/lQ=="
+     container => "insights-logs-networksecuritygroupflowevent"
+     codec => "json"
+     file_head_bytes => 12
+     file_tail_bytes => 2
+   }
+ }
+ filter {
+   split { field => "[records]" }
+   split { field => "[records][properties][flows]"}
+   split { field => "[records][properties][flows][flows]"}
+   split { field => "[records][properties][flows][flows][flowTuples]"}
+
+   mutate {
+    split => { "[records][resourceId]" => "/"}
+    add_field => {"Subscription" => "%{[records][resourceId][2]}"
+                 "ResourceGroup" => "%{[records][resourceId][4]}"
+                 "NetworkSecurityGroup" => "%{[records][resourceId][8]}"}
+
+    split => { "[records][properties][flows][flows][flowTuples]" => ","}
+    add_field => {
+               "unixtimestamp" => "%{[records][properties][flows][flows][flowTuples][0]}"
+               "srcIp" => "%{[records][properties][flows][flows][flowTuples][1]}"
+               "destIp" => "%{[records][properties][flows][flows][flowTuples][2]}"
+               "srcPort" => "%{[records][properties][flows][flows][flowTuples][3]}"
+               "destPort" => "%{[records][properties][flows][flows][flowTuples][4]}"
+               "protocol" => "%{[records][properties][flows][flows][flowTuples][5]}"
+               "trafficflow" => "%{[records][properties][flows][flows][flowTuples][6]}"
+               "trafficDecision" => "%{[records][properties][flows][flows][flowTuples][7]}"
+               "flowState" => "%{[records][properties][flows][flows][flowTuples][8]}"
+               "packetCountSD" => "%{[records][properties][flows][flows][flowTuples][9]}"
+               "bytesSentSD" => "%{[records][properties][flows][flows][flowTuples][10]}"
+               "packetCountDS" => "%{[records][properties][flows][flows][flowTuples][11]}"
+               "bytesSentDS" => "%{[records][properties][flows][flows][flowTuples][12]}"
+                }
+
+    }
+    mutate {convert => {"Subscription" => "string"}}
+    mutate {convert => {"ResourceGroup" => "string"}}
+    mutate {convert => {"NetworkSecurityGroup" => "string"}}
+    mutate {convert => {"srcPort" => "integer"}}
+    mutate {convert => {"unixtimestamp" => "integer"}}
+    mutate {convert => {"destPort" => "integer"}}
+    mutate {convert => {"packetCountSD" => "integer"}}
+    mutate {convert => {"bytesSentSD" => "integer"}}
+    mutate {convert => {"packetCountDS" => "integer"}}
+    mutate {convert => {"bytesSentDS" => "integer"}}
+
+    date {
+        match => ["unixtimestamp", "UNIX"]
+        target => "myTime"
+        remove_field => [ "time" ]
+    }
+
+
+ }
+ output {
+   stdout { codec => rubydebug }
+   elasticsearch {
+     hosts => "localhost"
+     index => "nsg-flow-logs"
+   }
+ }
+```
+
+
 ## More information
 The source code of this plugin is hosted in GitHub repo [Microsoft Azure Diagnostics with ELK](https://github.com/Azure/azure-diagnostics-tools). We welcome you to provide feedback and/or contribute to the project.
