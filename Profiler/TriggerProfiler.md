@@ -4,7 +4,7 @@ The Application Insights Profiler is a great tool to investigate code level perf
 ### Scenario Background
 In this tutorial we will diagnose an application (DiagService) running in Azure App Services that is experiencing slowdowns due to intermittent high CPU conditions. We can see what the CPU activity for the application looks like by using the Application Insights metrics explorer and choosing the CPU metric.
 
-[image:cpumetric]
+![](https://user-images.githubusercontent.com/15442480/66504200-82eea400-ea7d-11e9-9ca9-01ba0d1749cf.png)
 
 Here we can see that the average CPU consumption of our application is roughly 63%. What is interesting and presents a challenge is that the CPU tends to periodically spike to over 85% which is an unexpected behavior for our application. Our task now is to figure out what is causing those 85%+ CPU spikes. 
 
