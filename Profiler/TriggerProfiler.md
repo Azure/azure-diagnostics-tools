@@ -15,7 +15,7 @@ As mentioned earlier, the profiler automatically collects traces for 2 minutes e
 
 Another approach is to utilize the on demand profiling capability which is available from the Configure Profiler blade as shown below.
 
-[image:ondemand]
+![](https://user-images.githubusercontent.com/15442480/66504218-8c780c00-ea7d-11e9-975a-0415170e736e.png)
 
 This allows us to kick start a profiler session at any time we want. While this is a very useful approach it requires that you (1) know exactly when the problem surfaces and (2) the time window of the performance problem is large enough so that you have time to kick start the profiling session. In our case, the high CPU condition is intermittent and the spike fairly short leaving very little opportunity to use the Profile Now capability. 
 
@@ -25,11 +25,11 @@ This brings us to the last approach known as trigger based profiling. With trigg
 ### Configuring Triggers
 The first thing we have to do is tell the profiler the conditions (triggers) that we want it to start collecting traces. From the performance blade, select the Configure Profiler to open the configuration blade. Next, we click the Triggers button shown below.
 
-[image:triggerbutton]
+![](https://user-images.githubusercontent.com/15442480/66504286-af0a2500-ea7d-11e9-8f15-21af1eba1fa6.png)
 
 This opens up a new trigger configuration view:
 
-[image:configureCPUtrigger]
+![](https://user-images.githubusercontent.com/15442480/66504172-7407f180-ea7d-11e9-8ef2-b7b46b181e26.png)
 
 There are 4 different options that can be configured.
 
@@ -46,11 +46,11 @@ At this point we have configured the Profiler to start collecting traces when th
 ### Viewing Traces Generated From Triggers
 At this point, we wait for the condition (85%+ CPU) to occur again and then turn our attention to the traces generated. The easiest way to view the generated traces is via the Configure Profiler button in the performance blade. On the configuration blade you will notice a list of available profiling sessions. To make it easier to understand whether a trace has been generated as a result of default sampling or a trigger a new column has been added called 'Triggered By' as shown below. 
 
-[image:sessions]
+![](https://user-images.githubusercontent.com/15442480/66504241-969a0a80-ea7d-11e9-875b-65f144e60439.png)
 
 It also very conveniently tells you what the CPU and memory consumption was at the time of the profiler session. As you can see, a profiler session was started as a result of the previous CPU trigger that we configured. The CPU was at 88% and memory at 71%. We can now click on that row to open up the trace view blade and investigate further:
 
-[image:traceview]
+![](https://user-images.githubusercontent.com/15442480/66504269-a3b6f980-ea7d-11e9-8563-9f880412ee98.png)
 
 The above blade is split into two primary sections:
 
