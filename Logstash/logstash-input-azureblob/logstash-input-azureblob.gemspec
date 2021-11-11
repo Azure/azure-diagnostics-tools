@@ -22,7 +22,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'logstash-core-plugin-api', '>= 1.60', '<= 2.99'
   s.add_runtime_dependency 'logstash-codec-json_lines', '~> 3'
   s.add_runtime_dependency 'stud', '~> 0.0', '>= 0.0.22'
-  s.add_runtime_dependency 'azure-storage', '~> 0.15.0.preview'
+  s.add_runtime_dependency 'azure-storage-blob', '~> 2'
   s.add_development_dependency 'logstash-devutils', '~> 1'
   s.add_development_dependency 'logging', '~> 2'
 
