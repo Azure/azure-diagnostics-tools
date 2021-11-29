@@ -3,7 +3,7 @@ require "logstash/inputs/base"
 require "logstash/namespace"
 
 # Azure Storage SDK for Ruby
-require "azure/storage"
+require "azure/storage/blob"
 require 'json' # for registry content
 require "securerandom" # for generating uuid.
 
@@ -142,11 +142,9 @@ class LogStash::Inputs::LogstashInputAzureblob < LogStash::Inputs::Base
     @reader = SecureRandom.uuid
 
     # Setup a specific instance of an Azure::Storage::Client
-    client = Azure::Storage::Client.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}", :user_agent_prefix => user_agent)
-    # Get an azure storage blob service object from a specific instance of an Azure::Storage::Client
-    @azure_blob = client.blob_client
+    @azure_blob = Azure::Storage::Blob::BlobService.create(:storage_account_name => @storage_account_name, :storage_access_key => @storage_access_key, :storage_blob_host => "https://#{@storage_account_name}.blob.#{@endpoint}", :user_agent_prefix => user_agent)
     # Add retry filter to the service object
-    @azure_blob.with_filter(Azure::Storage::Core::Filter::ExponentialRetryPolicyFilter.new)
+    @azure_blob.with_filter(Azure::Storage::Common::Core::Filter::ExponentialRetryPolicyFilter.new)
   end # def register
 
   def run(queue)
